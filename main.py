@@ -133,4 +133,20 @@ def update_user(
     return response
 
 
+@app.delete("/{user_id}")
+def delete_user(
+        user_id: int,
+        db: Session = Depends(get_db)
+):
 
+    user = db.query(models.Users).filter(models.Users.id == user_id).first()
+    if not user:
+        exception_404_not_found()
+
+    db.query(models.Users).filter(models.Users.id == user_id).delete()
+
+    db.commit()
+
+    return {
+        "message": f"user - {user.id} deleted successfully"
+    }
