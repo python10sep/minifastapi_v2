@@ -1,8 +1,9 @@
 import models
 from database import engine, SessionLocal
 from sqlalchemy.orm import Session
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
+from typing import Optional
 
 
 class UserPostRequest(BaseModel):
@@ -17,6 +18,19 @@ class UserPostResponse(BaseModel):
     id: int
     username: str
     email: str
+
+
+def exception_422_null_body():
+    raise HTTPException(
+        status_code=422,
+        detail="You forgot to add request body"
+    )
+
+def exception_404_not_found():
+    raise HTTPException(
+        status_code=404,
+        detail="There is no user with this ID"
+    )
 
 
 app = FastAPI()
@@ -41,7 +55,6 @@ def create_sample_user():
     db = get_db()
     session = Session()
     session.add(user_model)
-    breakpoint()
     session.commit()
 
 
@@ -71,8 +84,12 @@ def read_all(db: Session = Depends(get_db)):
     return db.query(models.Users).all()
 
 
-@app.post("/", response_model=UserPostResponse)
-def create_user(user_data: UserPostRequest, db: Session = Depends(get_db)):
+@app.post("/", status_code=201, response_model=UserPostResponse)
+def create_user(user_data: Optional[UserPostRequest] = None, db: Session = Depends(get_db)):
+
+    if user_data is None:
+        exception_422_null_body()
+
     user_model = models.Users()
     user_model.id = user_data.id
     user_model.username = user_data.username
@@ -86,3 +103,34 @@ def create_user(user_data: UserPostRequest, db: Session = Depends(get_db)):
         email=user_model.email)
 
     return response
+
+
+@app.put("/{user_id}")
+def update_user(
+        user_id: int,
+        user_data: Optional[UserPostRequest] = None,
+        db: Session = Depends(get_db)
+):
+    if user_data is None:
+        exception_422_null_body()
+
+    user = db.query(models.Users).filter(models.Users.id == user_id).first()
+    if not user:
+        exception_404_not_found()
+
+    user.username = user_data.username
+    user.email = user_data.email
+    user.first_name = user_data.first_name
+
+    db.add(user)
+    db.commit()
+    response = UserPostResponse(
+        id=user_data.id,
+        username=user_data.username,
+        email=user_data.email
+    )
+
+    return response
+
+
+
